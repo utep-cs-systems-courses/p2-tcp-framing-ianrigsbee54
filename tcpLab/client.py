@@ -17,10 +17,11 @@ paramMap = params.parseParams(switchesVarDefaults)
 
 server, usage  = paramMap["server"], paramMap["usage"]
 
-def frameSend(sock, fileData):
-    msg = str(len(fileData)).encode() + b':' + fileData.encode()
-    sentMsg = sock.send(msg)
-    os.write(1, ("sending %d byte message" % len(fileData)).encode())
+def frameSend(sock, fileName, fileData):
+    msg = str(len(fileData)).encode() + b':' + fileName.encode() + b':' + fileData.encode()
+    while len(msg):
+        sentMsg = sock.send(msg)
+        msg = msg[sentMsg:]
     
 if usage:
     params.usage()
@@ -61,27 +62,24 @@ if delay != 0:
     print(f"sleeping for {delay}s")
     time.sleep(delay)
     print("done sleeping")
-fileNameSent = False
-while 1:
-    fileName = input("enter file name")
+    
+FILE_PATH ="clientFiles/"
+
+while True:
+    fileName = os.read(0, 1024).decode()
     fileName.strip()
     if fileName != "exit":
-        if os.path.isfile(fileName):
-            s.send(fileName.encode())
-            received = s.recv(1024).decode()
-            os.write(1, ("received: '%s'\n" % received).encode())
-            fileNameSent = True
-        else:
-            os.write(1, ("file doesnt exist, try again").encode())
-            sys.exit(0)
-        if fileNameSent == True:
-            file = open(fileName, 'r')
+        if os.path.exists(FILE_PATH + fileName):
+            file = open(FILE_PATH + fileName, "rb")
             fileData = file.read()
-            frameSend(s, fileData)
-            file.close()
+            if len(fileData) <= 0:
+                os.write(2, ("file is empty").encode())
+                continue
+            frameSend(s, fileName, fileData)
+        else:
+            os.write(2, ("file doesnt exist, try again").encode())
+            sys.exit(1)
     else:
         os.write(1, ("exiting").encode())
+        s.close()
         sys.exit(0)
-    break
-print("Zero length read.  Closing")
-s.close()
