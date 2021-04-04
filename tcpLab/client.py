@@ -1,28 +1,22 @@
 #! /usr/bin/env python3
 
 # Echo client program
-import socket, sys, re, time
+import socket, sys, re, time, os
 sys.path.append("../lib")       # for params
 import params
-
+from frameSock import frameSend
 switchesVarDefaults = (
     (('-s', '--server'), 'server', "127.0.0.1:50001"),
-    (('-d', '--delay'), 'delay', "0"),
+    (('-d', '--debug'), 'debug', False),
     (('-?', '--usage'), "usage", False), # boolean (set if present)
     )
 
 
-progname = "framedClient"
+progname = "client"
 paramMap = params.parseParams(switchesVarDefaults)
 
-server, usage  = paramMap["server"], paramMap["usage"]
+server, usage, debug  = paramMap["server"], paramMap["usage"], paramMap["debug"]
 
-def frameSend(sock, fileName, fileData):
-    msg = str(len(fileData)).encode() + b':' + fileName.encode() + b':' + fileData.encode()
-    while len(msg):
-        sentMsg = sock.send(msg)
-        msg = msg[sentMsg:]
-    
 if usage:
     params.usage()
 
@@ -34,52 +28,42 @@ except:
     sys.exit(1)
 
 s = None
-for res in socket.getaddrinfo(serverHost, serverPort, socket.AF_UNSPEC, socket.SOCK_STREAM):
-    af, socktype, proto, canonname, sa = res
-    try:
-        print("creating sock: af=%d, type=%d, proto=%d" % (af, socktype, proto))
-        s = socket.socket(af, socktype, proto)
-    except socket.error as msg:
-        print(" error: %s" % msg)
-        s = None
-        continue
-    try:
-        print(" attempting to connect to %s" % repr(sa))
-        s.connect(sa)
-    except socket.error as msg:
-        print(" error: %s" % msg)
-        s.close()
-        s = None
-        continue
-    break
+port = (serverHost, serverPort)
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect(port)
 
 if s is None:
     print('could not open socket')
     sys.exit(1)
-
-delay = float(paramMap['delay']) # delay before reading (default = 0s)
-if delay != 0:
-    print(f"sleeping for {delay}s")
-    time.sleep(delay)
-    print("done sleeping")
     
-FILE_PATH ="clientFiles/"
+FILE_PATH ="clientFiles/" #for our client files
 
 while True:
+    print("enter file name")
     fileName = os.read(0, 1024).decode()
-    fileName.strip()
+    filePath = (FILE_PATH + fileName).strip()
     if fileName != "exit":
-        if os.path.exists(FILE_PATH + fileName):
-            file = open(FILE_PATH + fileName, "rb")
+        if os.path.isfile(filePath):#check whole path if the file is a file.
+            print("sending file contents")
+            file = open(filePath, "rb")#read in binary mode
             fileData = file.read()
-            if len(fileData) <= 0:
-                os.write(2, ("file is empty").encode())
+            if len(fileData) < 1: #cant handle empty files
+                print("empty file, try again")
                 continue
-            frameSend(s, fileName, fileData)
+            frameSend(s, fileName, fileData)#send file and file contents
         else:
-            os.write(2, ("file doesnt exist, try again").encode())
+            print("file doesnt exist try again")
+            s.close() #close connection in order to open it up 
+            sys.exit(1)
+        if int(s.recv(1024).decode()) == 1: #if successful transfer
+            print("server received file")
+            s.close()
+            sys.exit(0)
+        else:#if unsuccessful transfer
+            print("server failed in receiving file")
+            s.close()
             sys.exit(1)
     else:
-        os.write(1, ("exiting").encode())
+        print("exiting")
         s.close()
         sys.exit(0)
