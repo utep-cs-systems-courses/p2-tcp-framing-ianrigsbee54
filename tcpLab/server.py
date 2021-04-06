@@ -42,8 +42,6 @@ while True:
             print("failed transfer")
             conn.send(("0").encode())#failed to receive
             sys.exit(1)
-            
-        fileName = fileName.decode()
         try:
             transferFile = open(fileName, "wb") #write in binary mode
             transferFile.write(fileData)
